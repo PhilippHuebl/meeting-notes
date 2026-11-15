@@ -27,12 +27,24 @@ final class SystemAudioCapture {
     private var running = false
     private var rebuildScheduled = false
     private var deviceListener: AudioObjectPropertyListenerBlock?
+    /// Bluetooth headsets (AirPods) drop to a lower sample rate when a call app opens their mic.
+    /// The default output device stays the same, so we also watch the format the IO proc was built with.
+    private var formatListener: AudioObjectPropertyListenerBlock?
+    private var builtFormat: Format?
+
+    private struct Format: Equatable {
+        var tapRate: Float64
+        var channels: UInt32
+        var deviceRate: Float64
+    }
 
     private static let outputDeviceAddresses = [
         kAudioHardwarePropertyDefaultOutputDevice,
         kAudioHardwarePropertyDefaultSystemOutputDevice,
-    ].map {
-        AudioObjectPropertyAddress(mSelector: $0,
+    ].map(address)
+
+    private static func address(_ selector: AudioObjectPropertySelector) -> AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress(mSelector: selector,
                                    mScope: kAudioObjectPropertyScopeGlobal,
                                    mElement: kAudioObjectPropertyElementMain)
     }
@@ -90,9 +102,20 @@ final class SystemAudioCapture {
                                                  mScope: kAudioObjectPropertyScopeGlobal,
                                                  mElement: kAudioObjectPropertyElementMain)
         status = AudioObjectGetPropertyData(tapID, &address, 0, nil, &size, &asbd)
-        guard status == noErr, let format = AVAudioFormat(streamDescription: &asbd) else {
+        guard status == noErr else { teardown(); throw CaptureError.coreAudio("Reading tap format", status) }
+        let tapRate = asbd.mSampleRate
+        // The IO proc delivers at the aggregate device's rate. After AirPods switch to headset mode
+        // the tap still reports 48 kHz while buffers arrive at 24 kHz, which played call audio 2x too fast.
+        var deviceRate = Float64(0)
+        size = UInt32(MemoryLayout<Float64>.size)
+        address = Self.address(kAudioDevicePropertyNominalSampleRate)
+        if AudioObjectGetPropertyData(aggregateID, &address, 0, nil, &size, &deviceRate) == noErr, deviceRate > 0 {
+            asbd.mSampleRate = deviceRate
+        }
+        guard let format = AVAudioFormat(streamDescription: &asbd) else {
             teardown(); throw CaptureError.coreAudio("Reading tap format", status)
         }
+        NSLog("System audio capture format: tap \(tapRate) Hz, device \(deviceRate) Hz, \(asbd.mChannelsPerFrame) ch")
 
         status = AudioDeviceCreateIOProcIDWithBlock(&procID, aggregateID, ioQueue) { [weak self] _, inInputData, _, _, _ in
             guard let self,
@@ -105,9 +128,14 @@ final class SystemAudioCapture {
 
         status = AudioDeviceStart(aggregateID, procID)
         guard status == noErr else { teardown(); throw CaptureError.coreAudio("Starting capture", status) }
+
+        builtFormat = currentFormat()
+        addFormatListener()
     }
 
     private func teardown() {
+        removeFormatListener()
+        builtFormat = nil
         if aggregateID != kAudioObjectUnknown {
             if let procID {
                 AudioDeviceStop(aggregateID, procID)
@@ -142,6 +170,44 @@ final class SystemAudioCapture {
         deviceListener = nil
     }
 
+    private var formatProperties: [(AudioObjectID, AudioObjectPropertyAddress)] {
+        [(tapID, Self.address(kAudioTapPropertyFormat)),
+         (aggregateID, Self.address(kAudioDevicePropertyNominalSampleRate))]
+    }
+
+    private func currentFormat() -> Format? {
+        var asbd = AudioStreamBasicDescription()
+        var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        var address = Self.address(kAudioTapPropertyFormat)
+        guard AudioObjectGetPropertyData(tapID, &address, 0, nil, &size, &asbd) == noErr else { return nil }
+        var deviceRate = Float64(0)
+        size = UInt32(MemoryLayout<Float64>.size)
+        address = Self.address(kAudioDevicePropertyNominalSampleRate)
+        guard AudioObjectGetPropertyData(aggregateID, &address, 0, nil, &size, &deviceRate) == noErr else { return nil }
+        return Format(tapRate: asbd.mSampleRate, channels: asbd.mChannelsPerFrame, deviceRate: deviceRate)
+    }
+
+    private func addFormatListener() {
+        // Rebuild only on a real change, so a notification fired by our own build cannot loop.
+        let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            guard let self, self.currentFormat() != self.builtFormat else { return }
+            self.scheduleRebuild()
+        }
+        for (object, var address) in formatProperties {
+            let status = AudioObjectAddPropertyListenerBlock(object, &address, controlQueue, listener)
+            if status != noErr { NSLog("Listening for audio format changes failed (OSStatus \(status))") }
+        }
+        formatListener = listener
+    }
+
+    private func removeFormatListener() {
+        guard let listener = formatListener else { return }
+        for (object, var address) in formatProperties where object != kAudioObjectUnknown {
+            AudioObjectRemovePropertyListenerBlock(object, &address, controlQueue, listener)
+        }
+        formatListener = nil
+    }
+
     /// Both default output properties usually change together, so coalesce them into one rebuild.
     private func scheduleRebuild() {
         guard running, !rebuildScheduled else { return }
@@ -153,7 +219,7 @@ final class SystemAudioCapture {
             self.teardown()
             do {
                 try self.build()
-                NSLog("System audio capture rebuilt after output device change")
+                NSLog("System audio capture rebuilt after output device or format change")
             } catch {
                 NSLog("Rebuilding system audio capture failed: \(error)")
             }
