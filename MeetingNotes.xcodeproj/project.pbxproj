@@ -14,6 +14,7 @@
 		14E225C74E47CD92D94EFC56 /* AppleSummarizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 606AF966F9688C1A4666C59A /* AppleSummarizer.swift */; };
 		1A8D770BC2E2695C5A610AAA /* ClaudeExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68587700A7A3E826204D60FB /* ClaudeExporter.swift */; };
 		1C8CA8590601E9A0C5C09740 /* CoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E156D09F0345A1D74A7332A /* CoreTests.swift */; };
+		230509E06E85C3056478EEF4 /* AppUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 191207878B16B0307BCCA584 /* AppUpdater.swift */; };
 		2366C49EEA827A2FBB812582 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 992115D1EB48C9DD7578FEAC /* AppState.swift */; };
 		24513E2CE5EE0E88FF66F8AE /* Meeting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9859880B54F8C9FC3952B668 /* Meeting.swift */; };
 		27C7F35F8CB6245613B5DD9E /* SelfTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 994036493DB24F0DC9A61B58 /* SelfTest.swift */; };
@@ -57,6 +58,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		191207878B16B0307BCCA584 /* AppUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdater.swift; sourceTree = "<group>"; };
 		19333912E0E00B0658B27D66 /* AudioInputDevices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioInputDevices.swift; sourceTree = "<group>"; };
 		1D44602F57E880C284B87D8F /* MarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownView.swift; sourceTree = "<group>"; };
 		27D1D982E2E690C066BAF4F0 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
@@ -129,6 +131,14 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
+		46B3B1B0DA2AFA7EEB5C5CB5 /* Updates */ = {
+			isa = PBXGroup;
+			children = (
+				191207878B16B0307BCCA584 /* AppUpdater.swift */,
+			);
+			path = Updates;
+			sourceTree = "<group>";
+		};
 		5D73A4132B6C543D3495BAA8 /* MeetingNotes */ = {
 			isa = PBXGroup;
 			children = (
@@ -142,6 +152,7 @@
 				73DEBB5F27F834A72B4E1259 /* Claude */,
 				699D7E6927850598C5ED86CB /* Models */,
 				F90AFFEBBA7EDD19AAD28623 /* Transcription */,
+				46B3B1B0DA2AFA7EEB5C5CB5 /* Updates */,
 				3EB1134E07979BCF0DCEB3F3 /* Views */,
 			);
 			path = MeetingNotes;
@@ -326,6 +337,7 @@
 			files = (
 				3BF87054B2F4305412862B70 /* AppSettings.swift in Sources */,
 				2366C49EEA827A2FBB812582 /* AppState.swift in Sources */,
+				230509E06E85C3056478EEF4 /* AppUpdater.swift in Sources */,
 				860D439C207B028F9B566B32 /* AppleSummarizer.swift in Sources */,
 				B0C1A24BF036B152FEF82363 /* AudioConverter16k.swift in Sources */,
 				08AB162C6F3E337DE1A422CE /* AudioInputDevices.swift in Sources */,
