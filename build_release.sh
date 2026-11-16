@@ -9,8 +9,8 @@
 #
 # With SUPublicEDKey set in project.yml, the script also writes dist/appcast.xml, the Sparkle update feed.
 # Upload it to the GitHub release together with the DMG. See README, section Updates.
-#   REPO_URL          repository that hosts the releases, for forks
-#   SPARKLE_KEY_FILE  private update key file, when the key is not in the login Keychain
+# The repository comes from SUFeedURL in project.yml. Set SPARKLE_KEY_FILE when the private update key
+# is in a file and not in the login Keychain.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -18,7 +18,6 @@ APP_NAME="Meeting Notes"
 IDENTITY="${SIGN_IDENTITY:-Developer ID Application: Soon Up GmbH (6A2SZH3VT5)}"
 TEAM_ID="${TEAM_ID:-6A2SZH3VT5}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-ainstype-notary}"
-REPO_URL="${REPO_URL:-https://github.com/ph1lb4/meeting-notes}"
 VERSION=$(grep CFBundleShortVersionString project.yml | sed -E 's/.*"(.*)".*/\1/')
 DMG="dist/MeetingNotes-${VERSION}.dmg"
 DERIVED="build/release"
@@ -67,11 +66,18 @@ spctl -a -t open --context context:primary-signature -v "${DMG}"
 
 echo "=== Creating update feed ==="
 # After stapling, because the feed holds a signature of the final DMG.
-PUBLIC_KEY=$(/usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" "${APP}/Contents/Info.plist" 2>/dev/null || true)
+INFO_PLIST="${APP}/Contents/Info.plist"
+PUBLIC_KEY=$(/usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" "${INFO_PLIST}" 2>/dev/null || true)
 if [[ -z "${PUBLIC_KEY// /}" ]]; then
   echo "No SUPublicEDKey in project.yml. Skipping the update feed. See README, section Updates."
   echo "=== Done: ${DMG} ==="
   exit 0
+fi
+FEED_URL=$(/usr/libexec/PlistBuddy -c "Print :SUFeedURL" "${INFO_PLIST}")
+REPO_URL="${FEED_URL%/releases/latest/download/*}"
+if [[ "${REPO_URL}" == "${FEED_URL}" ]]; then
+  echo "SUFeedURL must be <repository URL>/releases/latest/download/appcast.xml, found: ${FEED_URL}"
+  exit 1
 fi
 KEY_ARGS=()
 if [[ -n "${SPARKLE_KEY_FILE:-}" ]]; then KEY_ARGS=(--ed-key-file "${SPARKLE_KEY_FILE}"); fi
@@ -80,5 +86,10 @@ if [[ -n "${SPARKLE_KEY_FILE:-}" ]]; then KEY_ARGS=(--ed-key-file "${SPARKLE_KEY
   --link "${REPO_URL}/releases" \
   --full-release-notes-url "${REPO_URL}/releases/tag/v${VERSION}" \
   -o dist/appcast.xml dist
+# generate_appcast only warns when the private key does not match SUPublicEDKey, and installed apps reject such a feed.
+if ! grep -q 'sparkle:edSignature=' dist/appcast.xml; then
+  echo "dist/appcast.xml has no signature. The private update key does not match SUPublicEDKey."
+  exit 1
+fi
 
 echo "=== Done: upload ${DMG} and dist/appcast.xml to the release v${VERSION} ==="

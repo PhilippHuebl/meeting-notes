@@ -33,7 +33,9 @@ private struct UpdateSettingsContent: View {
     var body: some View {
         Section("Updates") {
             LabeledContent("Version", value: Self.version)
-            LabeledContent("Status") { StatusLabel(text: status.text, color: statusColor) }
+            if status != .idle {
+                LabeledContent("Status") { StatusLabel(text: status.text, color: statusColor) }
+            }
             if isSetUp {
                 Toggle("Check for updates automatically", isOn: $automaticChecks)
             }

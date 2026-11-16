@@ -10,7 +10,7 @@ import Sparkle
 
 @MainActor
 @Observable
-final class AppUpdater: NSObject, SPUUpdaterDelegate {
+final class AppUpdater: NSObject, SPUUpdaterDelegate, @preconcurrency SPUStandardUserDriverDelegate {
     static let shared = AppUpdater()
 
     private(set) var status: UpdateStatus
@@ -23,9 +23,13 @@ final class AppUpdater: NSObject, SPUUpdaterDelegate {
     @ObservationIgnored private var canCheckObservation: NSKeyValueObservation?
     @ObservationIgnored private var isBusy: @MainActor () -> Bool = { false }
     @ObservationIgnored private var retryTask: Task<Void, Never>?
+    @ObservationIgnored private var activeObserver: (any NSObjectProtocol)?
+    /// A scheduled update that Sparkle found but did not show yet.
+    @ObservationIgnored private var hasWaitingUpdate = false
 
     private static let busyErrorDomain = "MeetingNotes.AppUpdater"
     private static let retryInterval: Duration = .seconds(600)
+    private static let showDelay: Duration = .seconds(2)
 
     private var updater: SPUUpdater? { controller?.updater }
 
@@ -36,7 +40,7 @@ final class AppUpdater: NSObject, SPUUpdaterDelegate {
         status = isSetUp ? .idle : .notSetUp
         super.init()
         if isSetUp {
-            controller = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: self, userDriverDelegate: nil)
+            controller = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: self, userDriverDelegate: self)
         }
     }
 
@@ -59,11 +63,15 @@ final class AppUpdater: NSObject, SPUUpdaterDelegate {
         canCheckObservation = controller.updater.observe(\.canCheckForUpdates, options: [.initial, .new]) { [weak self] updater, _ in
             Task { @MainActor in self?.canCheck = updater.canCheckForUpdates }
         }
+        activeObserver = NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.showWaitingUpdate() }
+        }
     }
 
     func checkNow() {
         guard let updater, updater.canCheckForUpdates else { return }
-        status = .checking
+        // With a session in progress, Sparkle only brings its window to the front.
+        if !updater.sessionInProgress { status = .checking }
         updater.checkForUpdates()
     }
 
@@ -95,7 +103,38 @@ final class AppUpdater: NSObject, SPUUpdaterDelegate {
         }
     }
 
+    // MARK: SPUStandardUserDriverDelegate
+
+    var supportsGentleScheduledUpdateReminders: Bool { true }
+
+    func standardUserDriverShouldHandleShowingScheduledUpdate(_ update: SUAppcastItem, andInImmediateFocus immediateFocus: Bool) -> Bool {
+        UpdateStatus.showsScheduledUpdateNow(immediateFocus: immediateFocus, busy: isBusy())
+    }
+
+    func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState) {
+        hasWaitingUpdate = !handleShowingUpdate
+    }
+
+    func standardUserDriverDidReceiveUserAttention(forUpdate update: SUAppcastItem) {
+        hasWaitingUpdate = false
+    }
+
+    func standardUserDriverWillFinishUpdateSession() {
+        hasWaitingUpdate = false
+    }
+
     // MARK: Helpers
+
+    /// Shows the waiting update when the user comes back to the app and no meeting runs.
+    private func showWaitingUpdate() {
+        guard hasWaitingUpdate else { return }
+        Task { [weak self] in
+            // "Start Recording" in the menu bar brings the app to the front before the recording state is set.
+            try? await Task.sleep(for: Self.showDelay)
+            guard let self, self.hasWaitingUpdate, NSApp.isActive, !self.isBusy() else { return }
+            self.updater?.checkForUpdates()
+        }
+    }
 
     private static func isExpected(_ error: NSError) -> Bool {
         guard error.domain == SUSparkleErrorDomain else { return false }
@@ -111,7 +150,8 @@ final class AppUpdater: NSObject, SPUUpdaterDelegate {
                 try? await Task.sleep(for: Self.retryInterval)
             }
             self?.retryTask = nil
-            self?.updater?.checkForUpdatesInBackground()
+            guard let updater = self?.updater, updater.automaticallyChecksForUpdates else { return }
+            updater.checkForUpdatesInBackground()
         }
     }
 }

@@ -50,6 +50,7 @@ For summaries, either install and log in to [Claude Code](https://claude.com/cla
 - Recordings are written to `~/Library/Application Support/MeetingNotes/Recordings/`, outside any iCloud synced folder, and deleted after the final transcript unless you turn on "Keep audio".
 - With **Claude** as the summary engine, the transcript and your notes are sent to Anthropic when a summary is written or the transcript is fixed. Pick **Apple Intelligence only** in Settings, or turn off auto summary, to keep everything local.
 - Call capture records all sound your Mac plays. Tell the people in the call that you are recording.
+- The update check asks github.com for the latest version once a day. It sends no data about you or your Mac. You can turn it off in Settings.
 
 ## Where your notes live
 
@@ -98,23 +99,22 @@ The app updates itself with [Sparkle](https://sparkle-project.org). It reads `ap
 
 One-time setup:
 
-1. Build once, or run `xcodebuild -resolvePackageDependencies -project MeetingNotes.xcodeproj -scheme MeetingNotes -derivedDataPath build/release`, so that the Sparkle tools exist.
+1. Run `xcodebuild -resolvePackageDependencies -project MeetingNotes.xcodeproj -scheme MeetingNotes -derivedDataPath build/release`, so that the Sparkle tools exist.
 2. Run `build/release/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_keys`. It stores the private key in your login Keychain and prints the public key.
 3. Put the public key into `SUPublicEDKey` in `project.yml`, run `xcodegen generate` and commit.
 4. Back up the private key: `generate_keys -x sparkle_private_key`, store the file in a password manager, then delete it. Without the key you cannot ship updates to installed apps any more.
 
 For each release:
 
-1. Raise `CFBundleShortVersionString` and `CFBundleVersion` in `project.yml`. Sparkle compares `CFBundleVersion`, so it must go up every time.
-2. Run `./build_release.sh`. It also writes `dist/appcast.xml`.
-3. Create the GitHub release with the tag `v<version>` and upload both `dist/MeetingNotes-<version>.dmg` and `dist/appcast.xml`. It must be the latest release, not a draft or a pre-release, because the app reads `releases/latest/download/appcast.xml`.
+1. Raise `CFBundleShortVersionString` and `CFBundleVersion` in `project.yml`, run `xcodegen generate` and commit. Sparkle compares `CFBundleVersion`, so it must go up every time.
+2. Run `./build_release.sh`. It also writes `dist/appcast.xml`. The feed holds a signature of that exact DMG, so always upload the two files of the same run.
+3. Create the GitHub release as a draft with the tag `v<version>`, upload both `dist/MeetingNotes-<version>.dmg` and `dist/appcast.xml`, then publish it. It must be the latest release, not a pre-release, because the app reads `releases/latest/download/appcast.xml`.
 
-From a fork, set `REPO_URL` to your repository and use your own key. `SPARKLE_KEY_FILE` points the script at a key file instead of the Keychain.
+From a fork, change `SUFeedURL` in `project.yml` to your repository and use your own key. Otherwise your app reads the feed of this repository and rejects its updates. `SPARKLE_KEY_FILE` points the script at a key file instead of the Keychain.
 
 ## Credits
 
 - [Sparkle](https://sparkle-project.org) for updates (MIT)
-
 - [WhisperKit and SpeakerKit](https://github.com/argmaxinc/argmax-oss-swift) by Argmax (MIT)
 - [Whisper](https://github.com/openai/whisper) by OpenAI (MIT)
 - [pyannote](https://github.com/pyannote/pyannote-audio) speaker diarization (MIT)

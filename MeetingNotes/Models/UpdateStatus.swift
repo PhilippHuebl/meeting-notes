@@ -33,4 +33,9 @@ enum UpdateStatus: Equatable {
         }
         return hasText(publicKey) && hasText(feedURL)
     }
+
+    /// Sparkle may show a scheduled update at once only when it would take focus anyway and no meeting runs.
+    static func showsScheduledUpdateNow(immediateFocus: Bool, busy: Bool) -> Bool {
+        immediateFocus && !busy
+    }
 }

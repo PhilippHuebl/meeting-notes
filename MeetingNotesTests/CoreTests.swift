@@ -420,4 +420,10 @@ private func seg(_ start: Double, _ end: Double, _ speaker: String, _ text: Stri
         #expect(UpdateStatus.isSetUp(publicKey: "abc=", feedURL: "https://example.com/appcast.xml"))
         #expect(UpdateStatus.available(version: "0.2.0").text == "Version 0.2.0 is available.")
     }
+
+    @Test func scheduledUpdateWaitsWhileBusyOrInBackground() {
+        #expect(UpdateStatus.showsScheduledUpdateNow(immediateFocus: true, busy: false))
+        #expect(!UpdateStatus.showsScheduledUpdateNow(immediateFocus: true, busy: true))
+        #expect(!UpdateStatus.showsScheduledUpdateNow(immediateFocus: false, busy: false))
+    }
 }
