@@ -33,6 +33,8 @@ struct MenuBarView: View {
             }
         }
         Divider()
+        Button("Check for Updates…") { AppUpdater.shared.checkNow() }
+            .disabled(!AppUpdater.shared.canCheck)
         SettingsLink { Text("Settings…") }
         Button("Quit Meeting Notes") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
