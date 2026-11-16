@@ -36,6 +36,8 @@ Meeting bots are awkward, cloud transcription is a privacy question, and most no
 2. Drag **Meeting Notes** into Applications and open it. The app is signed and notarized.
 3. Hit **Record**. macOS asks for **Microphone** and **System Audio Recording** access once.
 
+After that the app keeps itself up to date. It checks for a new version once a day, and you can check by hand in Settings or with **Check for Updates…**. Versions up to 0.1.2 have no updater, so install the next version by hand one more time.
+
 The Whisper model (about 630 MB to 3 GB, you pick in Settings) and the speaker model download on first use. After that everything works offline.
 
 For summaries, either install and log in to [Claude Code](https://claude.com/claude-code), or turn on Apple Intelligence (macOS 26+).
@@ -90,7 +92,28 @@ Headless self test of the full pipeline on two audio files:
 SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" TEAM_ID=TEAMID NOTARY_PROFILE=your-profile ./build_release.sh
 ```
 
+### Updates
+
+The app updates itself with [Sparkle](https://sparkle-project.org). It reads `appcast.xml` from the latest GitHub release. Each update is signed with a private update key, and the app only installs updates that match the public key in `SUPublicEDKey` (`project.yml`). While that key is empty, the updater is off.
+
+One-time setup:
+
+1. Build once, or run `xcodebuild -resolvePackageDependencies -project MeetingNotes.xcodeproj -scheme MeetingNotes -derivedDataPath build/release`, so that the Sparkle tools exist.
+2. Run `build/release/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_keys`. It stores the private key in your login Keychain and prints the public key.
+3. Put the public key into `SUPublicEDKey` in `project.yml`, run `xcodegen generate` and commit.
+4. Back up the private key: `generate_keys -x sparkle_private_key`, store the file in a password manager, then delete it. Without the key you cannot ship updates to installed apps any more.
+
+For each release:
+
+1. Raise `CFBundleShortVersionString` and `CFBundleVersion` in `project.yml`. Sparkle compares `CFBundleVersion`, so it must go up every time.
+2. Run `./build_release.sh`. It also writes `dist/appcast.xml`.
+3. Create the GitHub release with the tag `v<version>` and upload both `dist/MeetingNotes-<version>.dmg` and `dist/appcast.xml`. It must be the latest release, not a draft or a pre-release, because the app reads `releases/latest/download/appcast.xml`.
+
+From a fork, set `REPO_URL` to your repository and use your own key. `SPARKLE_KEY_FILE` points the script at a key file instead of the Keychain.
+
 ## Credits
+
+- [Sparkle](https://sparkle-project.org) for updates (MIT)
 
 - [WhisperKit and SpeakerKit](https://github.com/argmaxinc/argmax-oss-swift) by Argmax (MIT)
 - [Whisper](https://github.com/openai/whisper) by OpenAI (MIT)
